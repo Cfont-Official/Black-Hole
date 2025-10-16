@@ -1,0 +1,15 @@
+{
+  "name": "black-hole",
+  "version": "1.0.0",
+  "description": "Black Hole \u2014 Bing image search (Replit-ready)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "node-fetch": "^2.6.7",
+    "cheerio": "^1.0.0-rc.12",
+    "cors": "^2.8.5"
+  }
+}

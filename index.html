@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Black Hole</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --card: #0b0b0b;
+      --muted: #bfbfbf;
+      --accent: #ff4d4d;
+      --text: #ffffff;
+    }
+    html,body { height:100%; margin:0; background:var(--bg); color:var(--text); font-family:Inter,system-ui,Segoe UI,Roboto,Arial; overflow:hidden; }
+    #particle-wrap { position:fixed; inset:0; z-index:0; pointer-events:none; }
+    .app { position:relative; z-index:1; max-width:1100px; margin:28px auto; padding:20px; }
+    header { display:flex; align-items:center; gap:12px; }
+    h1 { margin:0; font-size:28px; letter-spacing:1px; color:var(--text) }
+    .meta { color: var(--muted); margin-top:6px; font-size:13px }
+    .controls { display:flex; gap:8px; margin-top:14px; align-items:center; flex-wrap:wrap; }
+    input[type="search"]{ padding:10px 12px; border-radius:10px; border:1px solid #222; background: rgba(255,255,255,0.02); color: var(--text); min-width:280px; outline:none; }
+    select, button { padding:10px 12px; border-radius:10px; border:1px solid #222; background: rgba(255,255,255,0.02); color: var(--text); cursor:pointer; }
+    .grid { margin-top:18px; display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap:10px; max-height:60vh; overflow:auto; padding-right:6px; }
+    .card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:6px; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.03); }
+    .card img { width:100%; height:140px; object-fit:cover; border-radius:8px; display:block; background:#111; }
+    .label { font-size:12px; color: var(--muted); padding:6px 2px; }
+    footer { margin-top:18px; color: var(--muted); font-size:13px; }
+    @media (max-width:600px) { .app{padding:12px;} input[type="search"]{min-width:160px;flex:1 1 100%;} .controls{gap:6px;} }
+    input[type="search"]:focus, select:focus, button:focus { box-shadow: 0 0 14px rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); }
+    .warn { color:#ffb4b4; }
+    /* scrollbar tiny */
+    .grid::-webkit-scrollbar{width:8px;height:8px}
+    .grid::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.06);border-radius:8px}
+  </style>
+</head>
+<body>
+  <div id="particle-wrap"><canvas id="particle-canvas"></canvas></div>
+
+  <div class="app" role="main" aria-label="Black Hole image search">
+    <header>
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <rect x="1" y="1" width="22" height="22" rx="6" fill="#050505"></rect>
+        <circle cx="12" cy="12" r="5" fill="#000"></circle>
+        <circle cx="12" cy="12" r="8" stroke="#ff4d4d" stroke-width="0.9" opacity="0.12"></circle>
+      </svg>
+      <div>
+        <h1>Black Hole</h1>
+        <div class="meta">Tiny image search powered by Bing. Default SafeSearch: Moderate.</div>
+      </div>
+    </header>
+
+    <div class="controls" style="margin-bottom:6px">
+      <input id="q" type="search" placeholder="Search images... (try: cats, space nebula, architecture)" />
+      <label for="safe" style="color:var(--muted);font-size:13px">SafeSearch:</label>
+      <select id="safe">
+        <option value="moderate" selected>Moderate</option>
+        <option value="strict">Strict</option>
+        <option value="off">Off</option>
+      </select>
+      <button id="go">Search</button>
+      <button id="clear">Clear</button>
+    </div>
+
+    <div id="status" class="meta" aria-live="polite"></div>
+    <div id="grid" class="grid" role="list"></div>
+
+    <footer>
+      <div>Notes: Default is <strong>Moderate</strong>. Use responsibly. This demo scrapes Bing from a backend included in the project.</div>
+    </footer>
+  </div>
+
+  <script>
+    // Particle system (red squares rising)
+    (function(){
+      const canvas = document.getElementById('particle-canvas');
+      const ctx = canvas.getContext('2d', { alpha: true });
+      let DPR = Math.max(1, window.devicePixelRatio || 1);
+      const PARTICLE_COUNT = 80;
+      const PARTICLE_SIZE_MIN = 2;
+      const PARTICLE_SIZE_MAX = 6;
+      const SPEED_MIN = 20;
+      const SPEED_MAX = 80;
+      let particles = [];
+      function resize(){ DPR = Math.max(1, window.devicePixelRatio || 1); canvas.width = Math.floor(window.innerWidth * DPR); canvas.height = Math.floor(window.innerHeight * DPR); canvas.style.width = window.innerWidth + 'px'; canvas.style.height = window.innerHeight + 'px'; ctx.setTransform(DPR,0,0,DPR,0,0); }
+      function rand(min,max){ return Math.random()*(max-min)+min; }
+      function createParticle(x){ const size=rand(PARTICLE_SIZE_MIN,PARTICLE_SIZE_MAX); return { x: x!==undefined?x:rand(0,window.innerWidth), y: rand(window.innerHeight, window.innerHeight+200), size, speed: rand(SPEED_MIN,SPEED_MAX), drift: rand(-10,10), opacity: rand(0.35,0.95) }; }
+      function initParticles(){ particles=[]; for(let i=0;i<PARTICLE_COUNT;i++) particles.push(createParticle()); }
+      let lastTime = performance.now();
+      function update(now){
+        const dt = Math.min(0.05,(now-lastTime)/1000); lastTime = now;
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        for(let p of particles){
+          p.y -= p.speed*dt;
+          p.x += p.drift*dt;
+          if(p.y + p.size < -10){ p.x = rand(0,window.innerWidth); p.y = window.innerHeight + rand(0,200); p.size = rand(PARTICLE_SIZE_MIN,PARTICLE_SIZE_MAX); p.speed = rand(SPEED_MIN,SPEED_MAX); p.drift = rand(-10,10); p.opacity = rand(0.35,0.95); }
+          if(p.x < -50) p.x = window.innerWidth + 50;
+          if(p.x > window.innerWidth + 50) p.x = -50;
+          ctx.globalAlpha = p.opacity;
+          ctx.fillStyle = 'rgba(255,77,77,0.06)';
+          ctx.fillRect(Math.round(p.x-1), Math.round(p.y-1), Math.round(p.size+2), Math.round(p.size+2));
+          ctx.fillStyle = 'rgb(255,77,77)';
+          ctx.fillRect(Math.round(p.x), Math.round(p.y), Math.round(p.size), Math.round(p.size));
+        }
+        ctx.globalAlpha = 1;
+        requestAnimationFrame(update);
+      }
+      window.addEventListener('resize', ()=>{ resize(); });
+      function start(){ resize(); initParticles(); lastTime = performance.now(); requestAnimationFrame(update); }
+      start();
+    })();
+
+    // UI + search client
+    (function(){
+      const qInput = document.getElementById('q');
+      const safeSelect = document.getElementById('safe');
+      const goBtn = document.getElementById('go');
+      const clearBtn = document.getElementById('clear');
+      const grid = document.getElementById('grid');
+      const status = document.getElementById('status');
+
+      async function search(){
+        const q = qInput.value.trim();
+        if(!q){ status.textContent = 'Enter a search term.'; return; }
+        status.textContent = 'Searching...'; grid.innerHTML = '';
+        try{
+          const safe = safeSelect.value;
+          const res = await fetch(`/search?q=${encodeURIComponent(q)}&safe=${encodeURIComponent(safe)}`, { credentials: 'same-origin' });
+          if(!res.ok){ const body = await res.json().catch(()=>({})); status.textContent = body.error || 'Search failed.'; return; }
+          const data = await res.json();
+          status.textContent = `Showing ${data.count} results — SafeSearch: ${data.safe}`;
+          if(data.results && data.results.length){
+            for(const it of data.results){
+              const card = document.createElement('div'); card.className = 'card';
+              const img = document.createElement('img'); img.loading = 'lazy'; img.referrerPolicy = 'no-referrer'; img.alt = it.title || q; img.src = it.thumb || it.src || '';
+              const label = document.createElement('div'); label.className = 'label';
+              label.innerHTML = `<div style="font-weight:600;color:#fff;font-size:13px">${it.title?escapeHtml(it.title):''}</div><div style="font-size:11px;color:#9aa0a6">${it.page?shorten(it.page):''}</div>`;
+              card.appendChild(img); card.appendChild(label); grid.appendChild(card);
+            }
+          } else { status.textContent = 'No results found.'; }
+        } catch(err){
+          console.error(err); status.textContent = 'Error during search (network or backend missing).';
+        }
+      }
+      function escapeHtml(s){ return s? s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])):''; }
+      function shorten(u){ try{ const p=new URL(u); return p.hostname.replace('www.','') + (p.pathname=="/"?"":" · "+p.pathname.split('/').filter(Boolean).pop()); }catch(e){ return u; } }
+      goBtn.addEventListener('click', search);
+      qInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') search(); });
+      clearBtn.addEventListener('click', ()=>{ qInput.value=''; grid.innerHTML=''; status.textContent=''; });
+    })();
+  </script>
+</body>
+</html>
